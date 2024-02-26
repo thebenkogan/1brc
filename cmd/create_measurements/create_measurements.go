@@ -94,10 +94,15 @@ func GenerateMeasurements(output io.Writer, cities []CityAverage, size int, onGe
 	writer := bufio.NewWriter(output)
 	wroteBytes := 0
 
-	for range size {
+	for i := range size {
 		city := cities[rand.IntN(len(cities))]
 		measurement := city.RandomMeasurement()
-		n, err := writer.WriteString(fmt.Sprintf("%s;%.1f\n", city.City, measurement))
+		measurement = float64(int(measurement*10)) / 10 // single digit precision
+		line := fmt.Sprintf("%s;%.1f\n", city.City, measurement)
+		if i == size-1 {
+			line = strings.TrimSuffix(line, "\n")
+		}
+		n, err := writer.WriteString(line)
 		if err != nil {
 			return nil, err
 		}
