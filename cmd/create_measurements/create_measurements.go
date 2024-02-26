@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -50,27 +52,84 @@ func main() {
 	defer file.Close()
 
 	bar := progressbar.Default(int64(size))
-
-	writer := bufio.NewWriter(file)
-	wroteBytes := 0
-	for range size {
-		city := cityAverages[rand.IntN(len(cityAverages))]
-		measurement := city.RandomMeasurement()
-		n, err := writer.WriteString(fmt.Sprintf("%s;%.1f\n", city.City, measurement))
-		if err != nil {
-			panic(err)
-		}
-		wroteBytes += n
+	onGenOne := func() {
 		_ = bar.Add(1)
 	}
-	bar.Close()
 
-	err = writer.Flush()
+	generation, err := GenerateMeasurements(file, cityAverages, size, onGenOne)
+	bar.Close()
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Wrote %d bytes to %s", wroteBytes, outDir)
+	fmt.Printf("Wrote %d bytes to %s", generation.TotalBytes, outDir)
+
+	statsDir := filepath.Join(root, "data", "measurements.json")
+	file, err = os.Create(statsDir)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	err = json.NewEncoder(file).Encode(generation.CityStats)
+	if err != nil {
+		panic(err)
+	}
+}
+
+type Stats struct {
+	Min   float64 `json:"min"`
+	Max   float64 `json:"max"`
+	Mean  float64 `json:"mean"`
+	Count int     `json:"count"`
+}
+
+type Generation struct {
+	CityStats  map[string]*Stats
+	TotalBytes int
+}
+
+func GenerateMeasurements(output io.Writer, cities []CityAverage, size int, onGenOne func()) (*Generation, error) {
+	statsMap := make(map[string]*Stats)
+	writer := bufio.NewWriter(output)
+	wroteBytes := 0
+
+	for range size {
+		city := cities[rand.IntN(len(cities))]
+		measurement := city.RandomMeasurement()
+		n, err := writer.WriteString(fmt.Sprintf("%s;%.1f\n", city.City, measurement))
+		if err != nil {
+			return nil, err
+		}
+		onGenOne()
+		wroteBytes += n
+
+		if cityStats, ok := statsMap[city.City]; ok {
+			cityStats.Min = min(cityStats.Min, measurement)
+			cityStats.Max = max(cityStats.Max, measurement)
+			cityStats.Count++
+			N := float64(cityStats.Count)
+			cityStats.Mean = cityStats.Mean*(N-1)/N + measurement/N
+		} else {
+			statsMap[city.City] = &Stats{
+				Min:   measurement,
+				Max:   measurement,
+				Mean:  measurement,
+				Count: 1,
+			}
+		}
+
+	}
+
+	err := writer.Flush()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Generation{
+		CityStats:  statsMap,
+		TotalBytes: wroteBytes,
+	}, nil
 }
 
 type CityAverage struct {
