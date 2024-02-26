@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/schollz/progressbar/v3"
 	"golang.org/x/net/html"
 )
 
@@ -48,6 +49,8 @@ func main() {
 	}
 	defer file.Close()
 
+	bar := progressbar.Default(int64(size))
+
 	writer := bufio.NewWriter(file)
 	wroteBytes := 0
 	for range size {
@@ -58,14 +61,16 @@ func main() {
 			panic(err)
 		}
 		wroteBytes += n
+		_ = bar.Add(1)
 	}
+	bar.Close()
 
 	err = writer.Flush()
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Wrote %d measurements (%d bytes) to %s", size, wroteBytes, outDir)
+	fmt.Printf("Wrote %d bytes to %s", wroteBytes, outDir)
 }
 
 type CityAverage struct {
@@ -78,18 +83,18 @@ func (c CityAverage) RandomMeasurement() float64 {
 }
 
 func getElementNodes(root *html.Node, name string) []*html.Node {
-	var tableBodies []*html.Node
+	var elements []*html.Node
 	var f func(*html.Node)
 	f = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == name {
-			tableBodies = append(tableBodies, n)
+			elements = append(elements, n)
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
 			f(c)
 		}
 	}
 	f(root)
-	return tableBodies
+	return elements
 }
 
 func getInnerText(node *html.Node) string {
