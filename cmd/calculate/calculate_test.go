@@ -15,7 +15,7 @@ func TestCalculate(t *testing.T) {
 	root, _ := os.Getwd()
 	createPath := filepath.Join(root, "../../", "cmd/create_measurements/create_measurements.go")
 
-	if err := exec.Command("go", "run", createPath, "-path", testDir, "-name", name, "-size", "100000").Run(); err != nil {
+	if err := exec.Command("go", "run", createPath, "-path", testDir, "-name", name, "-size", "1000000").Run(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -51,6 +51,9 @@ func TestCalculate(t *testing.T) {
 			assertClose(t, "min", expected.Min, resultsStats.Min)
 			assertClose(t, "max", expected.Max, resultsStats.Max)
 			assertClose(t, "mean", expected.Mean, resultsStats.Mean)
+			if expected.Count != resultsStats.Count {
+				t.Errorf("Expected %d samples for %s, got %d", expected.Count, city, resultsStats.Count)
+			}
 		})
 	}
 }
