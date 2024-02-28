@@ -4,30 +4,37 @@ import (
 	"encoding/json"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
 func TestCalculate(t *testing.T) {
-	resultsPath := filepath.Join("/home/benkogan/code/1brc", "data", "results.json")
-	results, err := os.Open(resultsPath)
-	if err != nil {
+	testDir := t.TempDir()
+	name := "measurements"
+	root, _ := os.Getwd()
+	createPath := filepath.Join(root, "../../", "cmd/create_measurements/create_measurements.go")
+
+	if err := exec.Command("go", "run", createPath, "-path", testDir, "-name", name, "-size", "100000").Run(); err != nil {
 		t.Fatal(err)
 	}
 
-	expectedPath := filepath.Join("/home/benkogan/code/1brc", "data", "measurements.json")
+	dataPath := filepath.Join(testDir, name+".txt")
+	expectedPath := filepath.Join(testDir, name+".json")
+
+	stats := calculate(dataPath)
+	j, _ := json.Marshal(stats)
+	resultsStats := make(map[string]StatsJson)
+	if err := json.Unmarshal(j, &resultsStats); err != nil {
+		t.Fatal(err)
+	}
+
 	expected, err := os.Open(expectedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	expectedStats := make(map[string]StatsJson)
 	if err := json.NewDecoder(expected).Decode(&expectedStats); err != nil {
-		t.Fatal(err)
-	}
-
-	resultsStats := make(map[string]StatsJson)
-	if err := json.NewDecoder(results).Decode(&resultsStats); err != nil {
 		t.Fatal(err)
 	}
 

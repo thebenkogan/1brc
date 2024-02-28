@@ -20,8 +20,14 @@ import (
 const DATA_URL string = "https://en.wikipedia.org/wiki/List_of_cities_by_average_temperature"
 
 func main() {
+	root, _ := os.Getwd()
+
 	var size int
+	var path string
+	var name string
 	flag.IntVar(&size, "size", 100, "number of measurements in the dataset")
+	flag.StringVar(&path, "path", filepath.Join(root, "data"), "directory to write the measurements and stats")
+	flag.StringVar(&name, "name", "measurements", "name of the data and stats files")
 	flag.Parse()
 
 	res, err := http.Get(DATA_URL)
@@ -43,9 +49,8 @@ func main() {
 
 	fmt.Println("Found averages for", len(cityAverages), "cities.")
 
-	root, _ := os.Getwd()
-	outDir := filepath.Join(root, "data", "measurements.txt")
-	file, err := os.Create(outDir)
+	dataFilePath := filepath.Join(path, fmt.Sprintf("%s.txt", name))
+	file, err := os.Create(dataFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -62,10 +67,10 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Printf("Wrote %d bytes to %s", generation.TotalBytes, outDir)
+	fmt.Printf("Wrote %d bytes to %s", generation.TotalBytes, dataFilePath)
 
-	statsDir := filepath.Join(root, "data", "measurements.json")
-	file, err = os.Create(statsDir)
+	statsPath := filepath.Join(path, fmt.Sprintf("%s.json", name))
+	file, err = os.Create(statsPath)
 	if err != nil {
 		panic(err)
 	}

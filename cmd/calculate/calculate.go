@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"math"
 	"os"
 	"path/filepath"
@@ -13,8 +14,27 @@ import (
 
 func main() {
 	root, _ := os.Getwd()
-	dataPath := filepath.Join(root, "data", "measurements.txt")
-	file, err := os.Open(dataPath)
+	var dataPath string
+	var resultsPath string
+	flag.StringVar(&dataPath, "source", filepath.Join(root, "data", "measurements.txt"), "path to the data file")
+	flag.StringVar(&resultsPath, "out", filepath.Join(root, "data", "results.json"), "path to store results")
+
+	stats := calculate(dataPath)
+
+	resultsFile, err := os.Create(resultsPath)
+	if err != nil {
+		panic(err)
+	}
+	defer resultsFile.Close()
+
+	err = json.NewEncoder(resultsFile).Encode(stats)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func calculate(path string) *StatsStore {
+	file, err := os.Open(path)
 	if err != nil {
 		panic(err)
 	}
@@ -36,7 +56,7 @@ func main() {
 			// last worker should read up to end of file, this fixes any division rounding errors in amountPerWorker
 			amount = math.MaxInt64
 		}
-		go worker(dataPath, offset, amount, storesChan)
+		go worker(path, offset, amount, storesChan)
 	}
 
 	stores := make([]*StatsStore, numWorkers)
@@ -44,18 +64,7 @@ func main() {
 		stores[i] = <-storesChan
 	}
 
-	merged := MergeStores(stores)
-
-	resultsFile, err := os.Create(filepath.Join(root, "data", "results.json"))
-	if err != nil {
-		panic(err)
-	}
-	defer resultsFile.Close()
-
-	err = json.NewEncoder(resultsFile).Encode(merged)
-	if err != nil {
-		panic(err)
-	}
+	return MergeStores(stores)
 }
 
 func worker(path string, offset int64, toRead int64, storesChan chan<- *StatsStore) {
