@@ -8,8 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
-	"strings"
+	"runtime/pprof"
 )
 
 func main() {
@@ -18,6 +17,18 @@ func main() {
 	var resultsPath string
 	flag.StringVar(&dataPath, "source", filepath.Join(root, "data", "measurements.txt"), "path to the data file")
 	flag.StringVar(&resultsPath, "out", filepath.Join(root, "data", "results.json"), "path to store results")
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
+	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			panic(err)
+		}
+		_ = pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	stats := calculate(dataPath)
 
@@ -94,12 +105,7 @@ func worker(path string, offset int64, toRead int64, storesChan chan<- *StatsSto
 	for scanner.Scan() {
 		b := scanner.Bytes()
 		line := string(b)
-		split := strings.Split(line, ";")
-		city := split[0]
-		measurement, err := strconv.ParseFloat(split[1], 64)
-		if err != nil {
-			panic(err)
-		}
+		city, measurement := parseLine(line)
 		store.recordMeasurement(city, measurement)
 		numBytes += int64(len(b)) + 1 // +1 for the discarded newline
 		if numBytes > toRead {
@@ -108,4 +114,37 @@ func worker(path string, offset int64, toRead int64, storesChan chan<- *StatsSto
 	}
 
 	storesChan <- store
+}
+
+func parseLine(line string) (string, float64) {
+	var splitIndex int
+	var measurement float64
+	var isNegative bool
+
+loop:
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case ';':
+			splitIndex = i
+		case '.':
+			if splitIndex != 0 {
+				measurement += float64(line[i+1]-'0') / 10
+				break loop
+			}
+		case '-':
+			if splitIndex != 0 {
+				isNegative = true
+			}
+		default:
+			if splitIndex != 0 {
+				measurement = measurement*10 + float64(line[i]-'0')
+			}
+		}
+	}
+
+	if isNegative {
+		measurement *= -1
+	}
+
+	return line[:splitIndex], measurement
 }
